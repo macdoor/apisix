@@ -110,8 +110,18 @@ func main(){
 
 以下示例展示了如何在指定路由中启用 `zipkin` 插件：
 
+:::note
+
+您可以这样从 `config.yaml` 中获取 `admin_key` 并存入环境变量：
+
+```bash
+admin_key=$(yq '.deployment.admin.admin_key[0].key' conf/config.yaml | sed 's/"//g')
+```
+
+:::
+
 ```shell
-curl http://127.0.0.1:9180/apisix/admin/routes/1  -H 'X-API-KEY: edd1c9f034335f136f87ad84b625c8f1' -X PUT -d '
+curl http://127.0.0.1:9180/apisix/admin/routes/1  -H "X-API-KEY: $admin_key" -X PUT -d '
 {
     "methods": ["GET"],
     "uri": "/index.html",
@@ -178,7 +188,7 @@ docker run -d --name jaeger \
 通过以下命令创建路由并启用插件：
 
 ```shell
-curl http://127.0.0.1:9180/apisix/admin/routes/1  -H 'X-API-KEY: edd1c9f034335f136f87ad84b625c8f1' -X PUT -d '
+curl http://127.0.0.1:9180/apisix/admin/routes/1  -H "X-API-KEY: $admin_key" -X PUT -d '
 {
     "methods": ["GET"],
     "uri": "/index.html",
@@ -221,7 +231,7 @@ HTTP/1.1 200 OK
 当你需要禁用 `zipkin` 插件时，可以通过以下命令删除相应的 JSON 配置，APISIX 将会自动重新加载相关配置，无需重启服务：
 
 ```shell
-curl http://127.0.0.1:9180/apisix/admin/routes/1 -H 'X-API-KEY: edd1c9f034335f136f87ad84b625c8f1' -X PUT -d '
+curl http://127.0.0.1:9180/apisix/admin/routes/1 -H "X-API-KEY: $admin_key" -X PUT -d '
 {
     "methods": ["GET"],
     "uri": "/index.html",
@@ -234,4 +244,33 @@ curl http://127.0.0.1:9180/apisix/admin/routes/1 -H 'X-API-KEY: edd1c9f034335f13
         }
     }
 }'
+```
+
+## 如何使用变量
+
+以下`nginx`变量是由`zipkin` 设置的。
+
+- `zipkin_context_traceparent` -  [W3C trace context](https://www.w3.org/TR/trace-context/#trace-context-http-headers-format), 例如：`00-0af7651916cd43dd8448eb211c80319c-b9c7c989f97918e1-01`
+- `zipkin_trace_id` - 当前 span 的 trace_id
+- `zipkin_span_id` - 当前 span 的 span_id
+
+如何使用？你需要在配置文件（`./conf/config.yaml`）设置如下：
+
+```yaml title="./conf/config.yaml"
+http:
+    enable_access_log: true
+    access_log: "/dev/stdout"
+    access_log_format: '{"time": "$time_iso8601","zipkin_context_traceparent": "$zipkin_context_traceparent","zipkin_trace_id": "$zipkin_trace_id","zipkin_span_id": "$zipkin_span_id","remote_addr": "$remote_addr","uri": "$uri"}'
+    access_log_format_escape: json
+plugins:
+  - zipkin
+plugin_attr:
+  zipkin:
+    set_ngx_var: true
+```
+
+你也可以在打印日志的时候带上 `trace_id`
+
+```print error log
+log.error(ngx.ERR,ngx_var.zipkin_trace_id,"error message")
 ```

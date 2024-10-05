@@ -43,6 +43,9 @@ local stream_local_plugins_hash = core.table.new(0, 32)
 local merged_route = core.lrucache.new({
     ttl = 300, count = 512
 })
+local merged_stream_route = core.lrucache.new({
+    ttl = 300, count = 512
+})
 local expr_lrucache = core.lrucache.new({
     ttl = 300, count = 512
 })
@@ -328,6 +331,8 @@ function _M.load(config)
         return local_plugins
     end
 
+    local exporter = require("apisix.plugins.prometheus.exporter")
+
     if ngx.config.subsystem == "http" then
         if not http_plugin_names then
             core.log.error("failed to read plugin list from local file")
@@ -340,6 +345,15 @@ function _M.load(config)
             local ok, err = load(http_plugin_names, wasm_plugin_names)
             if not ok then
                 core.log.error("failed to load plugins: ", err)
+            end
+
+            local enabled = core.table.array_find(http_plugin_names, "prometheus") ~= nil
+            local active  = exporter.get_prometheus() ~= nil
+            if not enabled then
+                exporter.destroy()
+            end
+            if enabled and not active then
+                exporter.http_init()
             end
         end
     end
@@ -637,6 +651,49 @@ function _M.merge_service_route(service_conf, route_conf)
 end
 
 
+local function merge_service_stream_route(service_conf, route_conf)
+    -- because many fields in Service are not supported by stream route,
+    -- so we copy the stream route as base object
+    local new_conf = core.table.deepcopy(route_conf)
+    if service_conf.value.plugins then
+        for name, conf in pairs(service_conf.value.plugins) do
+            if not new_conf.value.plugins then
+                new_conf.value.plugins = {}
+            end
+
+            if not new_conf.value.plugins[name] then
+                new_conf.value.plugins[name] = conf
+            end
+        end
+    end
+
+    new_conf.value.service_id = nil
+
+    if not new_conf.value.upstream and service_conf.value.upstream then
+        new_conf.value.upstream = service_conf.value.upstream
+    end
+
+    if not new_conf.value.upstream_id and service_conf.value.upstream_id then
+        new_conf.value.upstream_id = service_conf.value.upstream_id
+    end
+
+    return new_conf
+end
+
+
+function _M.merge_service_stream_route(service_conf, route_conf)
+    core.log.info("service conf: ", core.json.delay_encode(service_conf, true))
+    core.log.info("  stream route conf: ", core.json.delay_encode(route_conf, true))
+
+    local version = route_conf.modifiedIndex .. "#" .. service_conf.modifiedIndex
+    local route_service_key = route_conf.value.id .. "#"
+            .. version
+    return merged_stream_route(route_service_key, version,
+            merge_service_stream_route,
+            service_conf, route_conf)
+end
+
+
 local function merge_consumer_route(route_conf, consumer_conf, consumer_group_conf)
     if not consumer_conf.plugins or
        core.table.nkeys(consumer_conf.plugins) == 0
@@ -691,6 +748,12 @@ function _M.merge_consumer_route(route_conf, consumer_conf, consumer_group_conf,
 
     local new_conf = merged_route(flag, api_ctx.conf_version,
                         merge_consumer_route, route_conf, consumer_conf, consumer_group_conf)
+
+    -- some plugins like limit-count don't care if consumer changes
+    -- all consumers should share the same counter
+    api_ctx.conf_type_without_consumer = api_ctx.conf_type
+    api_ctx.conf_version_without_consumer = api_ctx.conf_version
+    api_ctx.conf_id_without_consumer = api_ctx.conf_id
 
     api_ctx.conf_type = api_ctx.conf_type .. "&consumer"
     api_ctx.conf_version = api_ctx.conf_version .. "&" ..
@@ -854,7 +917,8 @@ local enable_data_encryption
 local function enable_gde()
     if enable_data_encryption == nil then
         enable_data_encryption =
-            core.table.try_read_attr(local_conf, "apisix", "data_encryption", "enable")
+            core.table.try_read_attr(local_conf, "apisix", "data_encryption",
+                    "enable_encrypt_fields") and (core.config.type == "etcd")
         _M.enable_data_encryption = enable_data_encryption
     end
 
@@ -870,7 +934,10 @@ local function get_plugin_schema_for_gde(name, schema_type)
 
     local schema
     if schema_type == core.schema.TYPE_CONSUMER then
-        schema = plugin_schema.consumer_schema
+        -- when we use a non-auth plugin in the consumer,
+        -- where the consumer_schema field does not exist,
+        -- we need to fallback to it's schema for encryption and decryption.
+        schema = plugin_schema.consumer_schema or plugin_schema.schema
     elseif schema_type == core.schema.TYPE_METADATA then
         schema = plugin_schema.metadata_schema
     else
@@ -977,7 +1044,7 @@ check_plugin_metadata = function(item)
     local ok, err = check_single_plugin_schema(item.id, item,
                                                core.schema.TYPE_METADATA, true)
     if ok and enable_gde() then
-        decrypt_conf(item.name, item, core.schema.TYPE_METADATA)
+        decrypt_conf(item.id, item, core.schema.TYPE_METADATA)
     end
 
     return ok, err

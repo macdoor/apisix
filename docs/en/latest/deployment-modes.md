@@ -39,10 +39,6 @@ Each of these deployment modes are explained in detail below.
 
 In the traditional deployment mode, one instance of APISIX will be both the `data_plane` and the `control_plane`.
 
-![traditional deployment mode](https://raw.githubusercontent.com/apache/apisix/master/docs/assets/images/deployment-traditional.png)
-
-There will be a conf server that listens on the UNIX socket and acts as a proxy between APISIX and etcd. Both the data and the control planes connect to this conf server via HTTP.
-
 An example configuration of the traditional deployment mode is shown below:
 
 ```yaml title="conf/config.yaml"
@@ -73,16 +69,9 @@ The instance of APISIX deployed as the traditional role will:
 
 In the decoupled deployment mode the `data_plane` and `control_plane` instances of APISIX are deployed separately, i.e., one instance of APISIX is configured to be a *data plane* and the other to be a *control plane*.
 
-![decoupled](https://raw.githubusercontent.com/apache/apisix/master/docs/assets/images/deployment-cp_and_dp.png)
-
 The instance of APISIX deployed as the data plane will:
 
-1. Fetch the configuration from the *control plane*. The default port is `9280`.
-2. Performs a health check on all configured control plane addresses before starting the service.
-   1. If the control plane addresses are unavailable, the startup fails and an exception is thrown.
-   2. If at least one control plane address is available, it prints the unhealthy control planes logs, and starts the APISIX service.
-   3. If all control planes are normal, APISIX service is started normally.
-3. Once the service is started, it will handle the user requests.
+Once the service is started, it will handle the user requests.
 
 The example below shows the configuration of an APISIX instance as *data plane* in the decoupled mode:
 
@@ -90,23 +79,13 @@ The example below shows the configuration of an APISIX instance as *data plane* 
 deployment:
     role: data_plane
     role_data_plane:
-       config_provider: control_plane
-       control_plane:
-           host:
-               - https://${Control_Plane_IP}:9280
-           prefix: /apisix
-           timeout: 30
-    certs:
-        cert: /path/to/client.crt
-        cert_key: /path/to/client.key
-        trusted_ca_cert: /path/to/ca.crt
+       config_provider: etcd
 #END
 ```
 
 The instance of APISIX deployed as the control plane will:
 
 1. Listen on port `9180` and handle Admin API requests.
-2. Provide the conf server which will listen on port `9280`. Both the control plane and the data plane will connect to this via HTTPS enforced by mTLS.
 
 The example below shows the configuration of an APISIX instance as *control plane* in the decoupled mode:
 
@@ -115,47 +94,13 @@ deployment:
     role: control_plane
     role_control_plane:
         config_provider: etcd
-        conf_server:
-            listen: 0.0.0.0:9280
-            cert: /path/to/server.crt
-            cert_key: /path/to/server.key
-            client_ca_cert: /path/to/ca.crt
     etcd:
        host:
            - https://${etcd_IP}:${etcd_Port}
        prefix: /apisix
        timeout: 30
-    certs:
-        cert: /path/to/client.crt
-        cert_key: /path/to/client.key
-        trusted_ca_cert: /path/to/ca.crt
 #END
 ```
-
-:::tip
-
-As OpenResty <= 1.21.4 does not support sending mTLS requests, to accept connections from APISIX running on these OpenResty versions, you need to disable the client certificate verification in the control plane instance as shown below:
-
-```yaml title="conf/config.yaml"
-deployment:
-    role: control_plane
-    role_control_plane:
-        config_provider: etcd
-        conf_server:
-            listen: 0.0.0.0:9280
-            cert: /path/to/server.crt
-            cert_key: /path/to/server.key
-    etcd:
-       host:
-           - https://${etcd_IP}:${etcd_Port}
-       prefix: /apisix
-       timeout: 30
-    certs:
-        trusted_ca_cert: /path/to/ca.crt
-#END
-```
-
-:::
 
 ## Standalone
 
@@ -206,9 +151,26 @@ routes:
 
 *WARNING*: APISIX will not load the rules into memory from file `conf/apisix.yaml` if there is no `#END` at the end.
 
-### How to configure Router
+Environment variables can also be used like so:
 
-Single Router：
+```yaml
+routes:
+  -
+    uri: /hello
+    upstream:
+        nodes:
+            "${{UPSTREAM_ADDR}}": 1
+        type: roundrobin
+#END
+```
+
+*WARNING*: When using docker to deploy APISIX in standalone mode. New environment variables added to `apisix.yaml` while APISIX has been initialized will only take effect after a reload.
+
+More information about using environment variables can be found [here](./admin-api.md#using-environment-variables).
+
+### How to configure Route
+
+Single Route：
 
 ```yaml
 routes:
@@ -221,7 +183,7 @@ routes:
 #END
 ```
 
-Multiple Router：
+Multiple Routes：
 
 ```yaml
 routes:
@@ -240,7 +202,7 @@ routes:
 #END
 ```
 
-### How to configure Router + Service
+### How to configure Route + Service
 
 ```yml
 routes:
@@ -257,7 +219,7 @@ services:
 #END
 ```
 
-### How to configure Router + Upstream
+### How to configure Route + Upstream
 
 ```yml
 routes:
@@ -273,7 +235,7 @@ upstreams:
 #END
 ```
 
-### How to configure Router + Service + Upstream
+### How to configure Route + Service + Upstream
 
 ```yml
 routes:
@@ -302,6 +264,26 @@ plugins:
   - name: jwt-auth
   - name: mqtt-proxy
     stream: true # set 'stream' to true for stream plugins
+#END
+```
+
+### How to configure Plugin Configs
+
+```yml
+plugin_configs:
+    -
+        id: 1
+        plugins:
+            response-rewrite:
+                body: "hello\n"
+routes:
+    - id: 1
+      uri: /hello
+      plugin_config_id: 1
+      upstream:
+        nodes:
+          "127.0.0.1:1980": 1
+        type: roundrobin
 #END
 ```
 

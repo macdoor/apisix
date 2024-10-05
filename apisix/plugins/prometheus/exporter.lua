@@ -28,6 +28,7 @@ local pcall = pcall
 local select = select
 local type = type
 local prometheus
+local prometheus_bkp
 local router = require("apisix.router")
 local get_routes = router.http_routes
 local get_ssls   = router.ssls
@@ -112,6 +113,9 @@ function _M.http_init(prometheus_enabled_in_stream)
     -- todo: support hot reload, we may need to update the lua-prometheus
     -- library
     if ngx.get_phase() ~= "init" and ngx.get_phase() ~= "init_worker"  then
+        if prometheus_bkp then
+            prometheus = prometheus_bkp
+        end
         return
     end
 
@@ -132,6 +136,11 @@ function _M.http_init(prometheus_enabled_in_stream)
         metric_prefix = attr.metric_prefix
     end
 
+    local exptime
+    if attr and attr.expire then
+        exptime = attr.expire
+    end
+
     prometheus = base_prometheus.init("prometheus-metrics", metric_prefix)
 
     metrics.connections = prometheus:gauge("nginx_http_current_connections",
@@ -143,7 +152,6 @@ function _M.http_init(prometheus_enabled_in_stream)
 
     metrics.etcd_reachable = prometheus:gauge("etcd_reachable",
             "Config server etcd reachable from APISIX, 0 is unreachable")
-
 
     metrics.node_info = prometheus:gauge("node_info",
             "Info of APISIX node",
@@ -163,7 +171,8 @@ function _M.http_init(prometheus_enabled_in_stream)
 
     metrics.upstream_status = prometheus:gauge("upstream_status",
             "Upstream status from health check",
-            {"name", "ip", "port"})
+            {"name", "ip", "port"},
+            exptime)
 
     -- per service
 
@@ -173,7 +182,8 @@ function _M.http_init(prometheus_enabled_in_stream)
     metrics.status = prometheus:counter("http_status",
             "HTTP status codes per service in APISIX",
             {"code", "route", "matched_uri", "matched_host", "service", "consumer", "node",
-            unpack(extra_labels("http_status"))})
+            unpack(extra_labels("http_status"))},
+            exptime)
 
     local buckets = DEFAULT_BUCKETS
     if attr and attr.default_buckets then
@@ -183,11 +193,12 @@ function _M.http_init(prometheus_enabled_in_stream)
     metrics.latency = prometheus:histogram("http_latency",
         "HTTP request latency in milliseconds per service in APISIX",
         {"type", "route", "service", "consumer", "node", unpack(extra_labels("http_latency"))},
-        buckets)
+        buckets, exptime)
 
     metrics.bandwidth = prometheus:counter("bandwidth",
             "Total bandwidth in bytes consumed per service in APISIX",
-            {"type", "route", "service", "consumer", "node", unpack(extra_labels("bandwidth"))})
+            {"type", "route", "service", "consumer", "node", unpack(extra_labels("bandwidth"))},
+            exptime)
 
     if prometheus_enabled_in_stream then
         init_stream_metrics()
@@ -201,7 +212,7 @@ function _M.stream_init()
     end
 
     if not pcall(function() return C.ngx_meta_lua_ffi_shdict_udata_to_zone end) then
-        core.log.error("need to build APISIX-Base to support L4 metrics")
+        core.log.error("need to build APISIX-Runtime to support L4 metrics")
         return
     end
 
@@ -475,8 +486,10 @@ local function collect(ctx, stream_only)
     local stats = control.get_health_checkers()
     for _, stat in ipairs(stats) do
         for _, node in ipairs(stat.nodes) do
-            metrics.upstream_status:set((node.status == "healthy") and 1 or 0,
-                gen_arr(stat.name, node.ip, node.port))
+            metrics.upstream_status:set(
+                    (node.status == "healthy" or node.status == "mostly_healthy") and 1 or 0,
+                    gen_arr(stat.name, node.ip, node.port)
+            )
         end
     end
 
@@ -513,6 +526,9 @@ _M.get_api = get_api
 
 
 function _M.export_metrics(stream_only)
+    if not prometheus then
+        core.response.exit(200, "{}")
+    end
     local api = get_api(false)
     local uri = ngx.var.uri
     local method = ngx.req.get_method()
@@ -535,5 +551,14 @@ end
 function _M.get_prometheus()
     return prometheus
 end
+
+
+function _M.destroy()
+    if prometheus ~= nil then
+        prometheus_bkp = core.table.deepcopy(prometheus)
+        prometheus = nil
+    end
+end
+
 
 return _M

@@ -44,20 +44,13 @@ import TabItem from '@theme/TabItem';
 
 ## 源码安装 APISIX
 
-首先，你可以通过以下命令安装依赖项：
+首先，我们需要指定需要安装的版本`APISIX_VERSION`:
 
 ```shell
-curl https://raw.githubusercontent.com/apache/apisix/master/utils/install-dependencies.sh -sL | bash -
+APISIX_VERSION='3.10.0'
 ```
 
-然后，创建一个目录并设置环境变量 `APISIX_VERSION`：
-
-```shell
-APISIX_VERSION='3.4.0'
-mkdir apisix-${APISIX_VERSION}
-```
-
-现在，你可以运行以下命令，从 Github 克隆 APISIX 源码：
+然后，你可以运行以下命令，从 Github 克隆 APISIX 源码：
 
 ```shell
 git clone --depth 1 --branch ${APISIX_VERSION} https://github.com/apache/apisix.git apisix-${APISIX_VERSION}
@@ -75,7 +68,7 @@ make deps
 make install
 ```
 
-该命令将安装 APISIX 运行时依赖的 Lua 库和 `apisix` 命令。
+该命令将安装 APISIX 运行时依赖的 Lua 库以及 `apisix-runtime` 和 `apisix` 命令。
 
 :::note
 
@@ -200,11 +193,11 @@ apisix quit
 apisix stop
 ```
 
-## 为 APISIX 构建 APISIX-Base
+## 为 APISIX 构建 APISIX-Runtime
 
 APISIX 的一些特性需要在 OpenResty 中引入额外的 NGINX 模块。
 
-如果要使用这些功能，你需要构建一个自定义的 OpenResty 发行版（APISIX-Base）。请参考 [apisix-build-tools](https://github.com/api7/apisix-build-tools) 配置你的构建环境并进行构建。
+如果要使用这些功能，你需要构建一个自定义的 OpenResty 发行版（APISIX-Runtime）。请参考 [apisix-build-tools](https://github.com/api7/apisix-build-tools) 配置你的构建环境并进行构建。
 
 ## 运行测试用例
 
@@ -257,12 +250,6 @@ APISIX 的一些特性需要在 OpenResty 中引入额外的 NGINX 模块。
 
   ```shell
   export PATH=/usr/local/openresty/nginx/sbin:$PATH
-  ```
-
-- macOS 通过 `homebrew` 的默认安装路径：
-
-  ```shell
-  export PATH=/usr/local/opt/openresty/nginx/sbin:$PATH
   ```
 
 ### 运行指定的测试用例

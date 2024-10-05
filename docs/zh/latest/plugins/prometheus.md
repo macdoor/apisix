@@ -109,7 +109,7 @@ plugin_attr:
 如果 Prometheus 插件收集的指标数量过多，在通过 URI 获取指标时，会占用 CPU 资源来计算指标数据，可能会影响 APISIX 处理正常请求。为解决此问题，APISIX 在 [privileged agent](https://github.com/openresty/lua-resty-core/blob/master/lib/ngx/process.md#enable_privileged_agent) 中暴露 URI 并且计算指标。
 如果使用 public-api 插件暴露该 URI，那么 APISIX 将在普通的 worker 进程中计算指标数据，这仍可能会影响 APISIX 处理正常请求。
 
-该特性要求 APISIX  运行在 [APISIX-Base](../FAQ.md#如何构建-apisix-base-环境) 上。
+该特性要求 APISIX  运行在 [APISIX-Runtime](../FAQ.md#如何构建-apisix-runtime-环境) 上。
 
 :::
 
@@ -119,9 +119,19 @@ plugin_attr:
 
 你可以通过如下命令在指定路由上启用 `prometheus` 插件：
 
+:::note
+
+您可以这样从 `config.yaml` 中获取 `admin_key` 并存入环境变量：
+
+```bash
+admin_key=$(yq '.deployment.admin.admin_key[0].key' conf/config.yaml | sed 's/"//g')
+```
+
+:::
+
 ```shell
 curl http://127.0.0.1:9180/apisix/admin/routes/1 \
--H 'X-API-KEY: edd1c9f034335f136f87ad84b625c8f1' -X PUT -d '
+-H "X-API-KEY: $admin_key" -X PUT -d '
 {
     "uri": "/hello",
     "plugins": {
@@ -334,7 +344,7 @@ apisix_upstream_status{name="/apisix/routes/1",ip="52.86.68.46",port="80"} 1
 当你需要禁用 `prometheus` 插件时，可以通过以下命令删除相应的 JSON 配置，APISIX 将会自动重新加载相关配置，无需重启服务：
 
 ```shell
-curl http://127.0.0.1:9180/apisix/admin/routes/1  -H 'X-API-KEY: edd1c9f034335f136f87ad84b625c8f1' -X PUT -d '
+curl http://127.0.0.1:9180/apisix/admin/routes/1  -H "X-API-KEY: $admin_key" -X PUT -d '
 {
     "uri": "/hello",
     "plugins": {},
@@ -351,7 +361,7 @@ curl http://127.0.0.1:9180/apisix/admin/routes/1  -H 'X-API-KEY: edd1c9f034335f1
 
 :::info IMPORTANT
 
-该功能要求 APISIX 运行在 [APISIX-Base](../FAQ.md#如何构建-APISIX-Base-环境？) 上。
+该功能要求 APISIX 运行在 [APISIX-Runtime](../FAQ.md#如何构建-APISIX-Runtime-环境？) 上。
 
 :::
 
@@ -368,7 +378,7 @@ stream_plugins:
 接着你需要在 stream 路由中配置该插件：
 
 ```shell
-curl http://127.0.0.1:9180/apisix/admin/stream_routes/1 -H 'X-API-KEY: edd1c9f034335f136f87ad84b625c8f1' -X PUT -d '
+curl http://127.0.0.1:9180/apisix/admin/stream_routes/1 -H "X-API-KEY: $admin_key" -X PUT -d '
 {
     "plugins": {
         "prometheus":{}

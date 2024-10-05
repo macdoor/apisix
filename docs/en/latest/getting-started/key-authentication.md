@@ -28,6 +28,7 @@ APISIX has a flexible plugin extension system and a number of existing plugins f
 - [LDAP](https://apisix.apache.org/docs/apisix/plugins/ldap-auth/)
 - [Open Policy Agent (OPA)](https://apisix.apache.org/docs/apisix/plugins/opa/)
 - [Forward Authentication](https://apisix.apache.org/docs/apisix/plugins/forward-auth/)
+- [Multiple Authentications](https://apisix.apache.org/docs/apisix/plugins/multi-auth/)
 
 In this tutorial, you will create a _consumer_ with _key authentication_, and learn how to enable and disable key authentication.
 
@@ -73,7 +74,7 @@ curl -i "http://127.0.0.1:9180/apisix/admin/consumers" -X PUT -d '
 }'
 ```
 
-You will receive an `HTTP/1.1 201 OK` response if the consumer was created successfully.
+You will receive an `HTTP/1.1 201 Created` response if the consumer was created successfully.
 
 ### Enable Authentication
 

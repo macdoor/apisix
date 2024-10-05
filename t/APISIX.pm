@@ -33,13 +33,6 @@ my $nginx_binary = $ENV{'TEST_NGINX_BINARY'} || 'nginx';
 $ENV{TEST_NGINX_HTML_DIR} ||= html_dir();
 $ENV{TEST_NGINX_FAST_SHUTDOWN} ||= 1;
 
-Test::Nginx::Socket::set_http_config_filter(sub {
-    my $config = shift;
-    my $snippet = `$apisix_home/t/bin/gen_snippet.lua conf_server`;
-    $config .= $snippet;
-    return $config;
-});
-
 sub read_file($) {
     my $infile = shift;
     open my $in, "$apisix_home/$infile"
@@ -85,10 +78,15 @@ if ($custom_dns_server) {
 }
 
 
-my $default_yaml_config = read_file("conf/config-default.yaml");
-# enable example-plugin as some tests require it
-$default_yaml_config =~ s/#- example-plugin/- example-plugin/;
-$default_yaml_config =~ s/enable_export_server: true/enable_export_server: false/;
+my $events_module = $ENV{TEST_EVENTS_MODULE} // "lua-resty-events";
+my $test_default_config = <<_EOC_;
+    -- read the default configuration, modify it, and the Lua package
+    -- cache will persist it for loading by other entrypoints
+    -- it is used to replace the test::nginx implementation
+    local default_config = require("apisix.cli.config")
+    default_config.plugin_attr.prometheus.enable_export_server = false
+    default_config.apisix.events.module = "$events_module"
+_EOC_
 
 my $user_yaml_config = read_file("conf/config.yaml");
 my $ssl_crt = read_file("t/certs/apisix.crt");
@@ -267,7 +265,7 @@ env ENABLE_ETCD_AUTH;
 env APISIX_PROFILE;
 env PATH; # for searching external plugin runner's binary
 env TEST_NGINX_HTML_DIR;
-env OPENSSL111_BIN;
+env OPENSSL_BIN;
 _EOC_
 
 
@@ -434,6 +432,7 @@ _EOC_
 
     $stream_config .= <<_EOC_;
     init_by_lua_block {
+        $test_default_config
         $stream_init_by_lua_block
         $stream_extra_init_by_lua
     }
@@ -443,6 +442,14 @@ _EOC_
     }
 
     $extra_stream_config
+
+    server {
+        listen unix:$apisix_home/t/servroot/logs/stream_worker_events.sock;
+        access_log off;
+        content_by_lua_block {
+            require("resty.events.compat").run()
+        }
+    }
 
     # fake server, only for test
     server {
@@ -531,7 +538,7 @@ _EOC_
     }
     apisix.http_init(args)
 
-    -- set apisix_lua_home into constans module
+    -- set apisix_lua_home into constants module
     -- it may be used by plugins to determine the work path of apisix
     local constants = require("apisix.constants")
     constants.apisix_lua_home = "$apisix_home"
@@ -556,7 +563,9 @@ _EOC_
     lua_shared_dict balancer-ewma 1m;
     lua_shared_dict balancer-ewma-locks 1m;
     lua_shared_dict balancer-ewma-last-touched-at 1m;
+    lua_shared_dict plugin-limit-req-redis-cluster-slot-lock 1m;
     lua_shared_dict plugin-limit-count-redis-cluster-slot-lock 1m;
+    lua_shared_dict plugin-limit-conn-redis-cluster-slot-lock 1m;
     lua_shared_dict tracing_buffer 10m;    # plugin skywalking
     lua_shared_dict access-tokens 1m;    # plugin authz-keycloak
     lua_shared_dict discovery 1m;    # plugin authz-keycloak
@@ -568,6 +577,7 @@ _EOC_
     lua_shared_dict kubernetes-first 1m;
     lua_shared_dict kubernetes-second 1m;
     lua_shared_dict tars 1m;
+    lua_shared_dict ocsp-stapling 10m;
     lua_shared_dict xds-config 1m;
     lua_shared_dict xds-config-version 1m;
     lua_shared_dict cas_sessions 10m;
@@ -615,6 +625,7 @@ _EOC_
     $dubbo_upstream
 
     init_by_lua_block {
+        $test_default_config
         $init_by_lua_block
     }
 
@@ -696,6 +707,18 @@ _EOC_
 
 _EOC_
 
+    $http_config .= <<_EOC_;
+    server {
+        listen unix:$apisix_home/t/servroot/logs/worker_events.sock;
+        access_log off;
+        location / {
+            content_by_lua_block {
+                require("resty.events.compat").run()
+            }
+        }
+    }
+_EOC_
+
     $block->set_value("http_config", $http_config);
 
     my $TEST_NGINX_HTML_DIR = $ENV{TEST_NGINX_HTML_DIR} ||= html_dir();
@@ -708,7 +731,10 @@ _EOC_
     $config .= <<_EOC_;
         $ipv6_listen_conf
 
-        listen 1994 ssl http2;
+        listen 1994 quic reuseport;
+        listen 1994 ssl;
+        http2 on;
+        http3 off;
         ssl_certificate             cert/apisix.crt;
         ssl_certificate_key         cert/apisix.key;
         lua_ssl_trusted_certificate cert/apisix.crt;
@@ -878,17 +904,6 @@ deployment:
 _EOC_
 
     if ($yaml_config !~ m/deployment:/) {
-        # TODO: remove this temporary option once we have using gRPC by default
-        if ($ENV{TEST_CI_USE_GRPC}) {
-            $default_deployment .= <<_EOC_;
-  etcd:
-    host:
-      - "http://127.0.0.1:2379"
-    prefix: /apisix
-    use_grpc: true
-_EOC_
-        }
-
         $yaml_config = $default_deployment . $yaml_config;
     }
 
@@ -902,8 +917,6 @@ _EOC_
     $user_files .= <<_EOC_;
 >>> ../conf/$debug_file
 $user_debug_config
->>> ../conf/config-default.yaml
-$default_yaml_config
 >>> ../conf/$config_file
 $yaml_config
 >>> ../conf/cert/apisix.crt

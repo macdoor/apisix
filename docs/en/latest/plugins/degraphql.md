@@ -97,7 +97,7 @@ Now we can use RESTful API to query the same data that is proxy by APISIX.
 First, we need to create a route in APISIX, and enable the degreaph plugin on the route, we need to define the GraphQL query in the plugin's config.
 
 ```bash
-curl --location --request PUT 'http://localhost:9080/apisix/admin/routes/1' \
+curl --location --request PUT 'http://localhost:9180/apisix/admin/routes/1' \
 --header 'X-API-KEY: edd1c9f034335f136f87ad84b625c8f1' \
 --header 'Content-Type: application/json' \
 --data-raw '{
@@ -210,7 +210,7 @@ we can execute it on `http://localhost:8080/playground`, and get the data as bel
 We convert the GraphQL query to JSON string like `"query($name: String!, $githubAccount: String!) {\n  persons(filter: { name: $name, githubAccount: $githubAccount }) {\n    id\n    name\n    blog\n    githubAccount\n    talks {\n      id\n      title\n    }\n  }\n}"`, so we create a route like this:
 
 ```bash
-curl --location --request PUT 'http://localhost:9080/apisix/admin/routes/1' \
+curl --location --request PUT 'http://localhost:9180/apisix/admin/routes/1' \
 --header 'X-API-KEY: edd1c9f034335f136f87ad84b625c8f1' \
 --header 'Content-Type: application/json' \
 --data-raw '{
@@ -312,8 +312,17 @@ In the GET request, the variables are passed in the query string.
 
 To remove the `degraphql` Plugin, you can delete the corresponding JSON configuration from the Plugin configuration. APISIX will automatically reload and you do not have to restart for this to take effect.
 
+:::note
+You can fetch the `admin_key` from `config.yaml` and save to an environment variable with the following command:
+
+```bash
+admin_key=$(yq '.deployment.admin.admin_key[0].key' conf/config.yaml | sed 's/"//g')
+```
+
+:::
+
 ```shell
-curl http://127.0.0.1:9180/apisix/admin/routes/1  -H 'X-API-KEY: edd1c9f034335f136f87ad84b625c8f1' -X PUT -d '
+curl http://127.0.0.1:9180/apisix/admin/routes/1  -H "X-API-KEY: $admin_key" -X PUT -d '
 {
   "methods": ["GET"],
   "uri": "/graphql",

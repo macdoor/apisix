@@ -1,5 +1,5 @@
 ---
-title: CHANGELOG
+title: 版本发布
 ---
 
 <!--
@@ -23,6 +23,10 @@ title: CHANGELOG
 
 ## Table of Contents
 
+- [3.8.0](#380)
+- [3.7.0](#370)
+- [3.6.0](#360)
+- [3.5.0](#350)
 - [3.4.0](#340)
 - [3.3.0](#330)
 - [3.2.1](#321)
@@ -70,6 +74,153 @@ title: CHANGELOG
 - [0.8.0](#080)
 - [0.7.0](#070)
 - [0.6.0](#060)
+
+## 3.8.0
+
+### Core
+
+- :sunrise: 支持使用 lua-resty-events 模块以提高性能：
+  - [#10550](https://github.com/apache/apisix/pull/10550)
+  - [#10558](https://github.com/apache/apisix/pull/10558)
+- :sunrise: 将 OpenSSL 1.1.1 升级到 OpenSSL 3：[#10724](https://github.com/apache/apisix/pull/10724)
+
+### Plugins
+
+- :sunrise: 添加 jwe-decryp 插件：[#10252](https://github.com/apache/apisix/pull/10252)
+- :sunrise: response-rewrite 插件使用 filters.regex 选项时支持 brotli：[#10733](https://github.com/apache/apisix/pull/10733)
+- :sunrise: 添加多重认证插件：[#10482](https://github.com/apache/apisix/pull/10482)
+- :sunrise: 在 `openid-connect` 插件中添加 `required scopes` 配置属性：[#10493](https://github.com/apache/apisix/pull/10493)
+- :sunrise: cors 插件支持 Timing-Allow-Origin 头：[#9365](https://github.com/apache/apisix/pull/9365)
+- :sunrise: 添加 brotli 插件：[#10515](https://github.com/apache/apisix/pull/10515)
+- :sunrise: body-transformer 插件增强：[#10496](https://github.com/apache/apisix/pull/10496)
+- :sunrise: limit-count 插件设置 redis_cluster_nodes 的最小长度为 1：[#10612](https://github.com/apache/apisix/pull/10612)
+- :sunrise: 允许通过环境变量配置 limit-count 插件：[#10607](https://github.com/apache/apisix/pull/10607)
+
+### Bugfixes
+
+- 修复：upstream nodes 为数组类型时，port 应为可选字段：[#10477](https://github.com/apache/apisix/pull/10477)
+- 修复：fault-injection 插件中变量提取不正确：[#10485](https://github.com/apache/apisix/pull/10485)
+- 修复：所有消费者应共享同一计数器 (limit-count)：[#10541](https://github.com/apache/apisix/pull/10541)
+- 修复：在向 opa 插件发送路由时安全地删除上游：[#10552](https://github.com/apache/apisix/pull/10552)
+- 修复：缺少 etcd init_dir 和无法列出资源：[#10569](https://github.com/apache/apisix/pull/10569)
+- 修复：Forward-auth 请求体过大：[#10589](https://github.com/apache/apisix/pull/10589)
+- 修复：永不退出的定时器导致的内存泄漏：[#10614](https://github.com/apache/apisix/pull/10614)
+- 修复：如果在 proxy-rewrite 插件中解析的值为 nil，则不调用 add_header：[#10619](https://github.com/apache/apisix/pull/10619)
+- 修复：频繁遍历 etcd 所有的键，导致 cpu 使用率高：[#10671](https://github.com/apache/apisix/pull/10671)
+- 修复：对于 prometheus 的 upstream_status 指标，mostly_healthy 是健康的：[#10639](https://github.com/apache/apisix/pull/10639)
+- 修复：在 zipkin 中避免在日志阶段获取 nil 值：[#10666](https://github.com/apache/apisix/pull/10666)
+- 修复：启用 openid-connect 插件而没有 redirect_uri 导致 500 错误：[#7690](https://github.com/apache/apisix/pull/7690)
+- 修复：为没有 end_session_endpoint 的 ODIC 添加 redirect_after_logout_uri：[#10653](https://github.com/apache/apisix/pull/10653)
+- 修复：当 content-encoding 为 gzip 时，response-rewrite 的 filters.regex 不适用：[#10637](https://github.com/apache/apisix/pull/10637)
+- 修复：prometheus 指标的泄漏：[#10655](https://github.com/apache/apisix/pull/10655)
+- 修复：Authz-keycloak 添加返回详细错误：[#10691](https://github.com/apache/apisix/pull/10691)
+- 修复：服务发现未正确更新上游节点：[#10722](https://github.com/apache/apisix/pull/10722)
+- 修复：apisix 重启失败：[#10696](https://github.com/apache/apisix/pull/10696)
+
+## 3.7.0
+
+### Change
+
+- :warning: 创建核心资源时不允许传入 `create_time` 和 `update_time`：[#10232](https://github.com/apache/apisix/pull/10232)
+- :warning: 从 SSL schema 中移除自包含的信息字段 `exptime`、`validity_start` 和 `validity_end`：[10323](https://github.com/apache/apisix/pull/10323)
+- :warning: 在 opentelemetry 插件的属性中，将 `route` 替换为 `apisix.route_name`，将 `service` 替换为 `apisix.service_name`，以遵循 span 名称和属性的标准：[#10393](https://github.com/apache/apisix/pull/10393)
+
+### Core
+
+- :sunrise: 添加令牌以支持 Consul 的访问控制：[#10278](https://github.com/apache/apisix/pull/10278)
+- :sunrise: 支持在 stream_route 中配置 `service_id` 引用 service 资源：[#10298](https://github.com/apache/apisix/pull/10298)
+- :sunrise: 使用 `apisix-runtime` 作为 apisix 运行时：
+  - [#10415](https://github.com/apache/apisix/pull/10415)
+  - [#10427](https://github.com/apache/apisix/pull/10427)
+
+### Plugins
+
+- :sunrise: 为 authz-keycloak 添加测试，使用 apisix secrets：[#10353](https://github.com/apache/apisix/pull/10353)
+- :sunrise: 向 openid-connect 插件添加授权参数：[#10058](https://github.com/apache/apisix/pull/10058)
+- :sunrise: 支持在 zipkin 插件中设置变量：[#10361](https://github.com/apache/apisix/pull/10361)
+- :sunrise: 支持 Nacos ak/sk 认证：[#10445](https://github.com/apache/apisix/pull/10445)
+
+### Bugfixes
+
+- 修复：获取健康检查目标状态失败时使用警告日志：
+  - [#10156](https://github.com/apache/apisix/pull/10156)
+- 修复：更新上游时应保留健康检查的状态：
+  - [#10312](https://github.com/apache/apisix/pull/10312)
+  - [#10307](https://github.com/apache/apisix/pull/10307)
+- 修复：在插件配置模式中添加 name 字段以保持一致性：[#10315](https://github.com/apache/apisix/pull/10315)
+- 修复：优化 upstream_schema 中的 tls 定义和错误的变量：[#10269](https://github.com/apache/apisix/pull/10269)
+- 修复（consul）：无法正常退出：[#10342](https://github.com/apache/apisix/pull/10342)
+- 修复：请求头 `Content-Type: application/x-www-form-urlencoded;charset=utf-8` 会导致 var 条件 `post_arg_xxx` 匹配失败：[#10372](https://github.com/apache/apisix/pull/10372)
+- 修复：在 Mac 上安装失败：[#10403](https://github.com/apache/apisix/pull/10403)
+- 修复（log-rotate）：日志压缩超时导致数据丢失：[#8620](https://github.com/apache/apisix/pull/8620)
+- 修复（kafka-logger）：从 required_acks 枚举值中移除 0：[#10469](https://github.com/apache/apisix/pull/10469)
+
+## 3.6.0
+
+### Change
+
+- :warning: 移除 `etcd.use_grpc`，不再支持使用 gRPC 协议与 etcd 进行通信：[#10015](https://github.com/apache/apisix/pull/10015)
+- :warning: 移除 conf server，数据平面不再支持与控制平面进行通信，需要从 `config_provider: control_plane` 调整为 `config_provider: etcd`：[#10012](https://github.com/apache/apisix/pull/10012)
+- :warning: 严格验证核心资源的输入：[#10233](https://github.com/apache/apisix/pull/10233)
+
+### Core
+
+- :sunrise: 支持配置访问日志的缓冲区大小：[#10225](https://github.com/apache/apisix/pull/10225)
+- :sunrise: 支持在 DNS 发现服务中允许配置 `resolv_conf` 来使用本地 DNS 解析器：[#9770](https://github.com/apache/apisix/pull/9770)
+- :sunrise: 安装不再依赖 Rust：[#10121](https://github.com/apache/apisix/pull/10121)
+- :sunrise: 在 xRPC 中添加 Dubbo 协议支持：[#9660](https://github.com/apache/apisix/pull/9660)
+
+### Plugins
+
+- :sunrise: 在 `traffic-split` 插件中支持 HTTPS：[#9115](https://github.com/apache/apisix/pull/9115)
+- :sunrise: 在 `ext-plugin` 插件中支持重写请求体：[#9990](https://github.com/apache/apisix/pull/9990)
+- :sunrise: 在 `opentelemetry` 插件中支持设置 NGINX 变量：[#8871](https://github.com/apache/apisix/pull/8871)
+- :sunrise: 在 `chaitin-waf` 插件中支持 UNIX sock 主机模式：[#10161](https://github.com/apache/apisix/pull/10161)
+
+### Bugfixes
+
+- 修复 GraphQL POST 请求路由匹配异常：[#10198](https://github.com/apache/apisix/pull/10198)
+- 修复 `apisix.yaml` 中多行字符串数组的错误：[#10193](https://github.com/apache/apisix/pull/10193)
+- 修复在 proxy-cache 插件中缺少 cache_zone 时提供错误而不是 nil panic：[#10138](https://github.com/apache/apisix/pull/10138)
+
+## 3.5.0
+
+### Change
+
+- :warning: request-id 插件移除雪花算法：[#9715](https://github.com/apache/apisix/pull/9715)
+- :warning: 不再兼容 OpenResty 1.19 版本，需要将其升级到 1.21+ 版本：[#9913](https://github.com/apache/apisix/pull/9913)
+- :warning: 删除配置项 `apisix.stream_proxy.only`，L4/L7 代理需要通过配置项 `apesix.proxy_mode` 来启用：[#9607](https://github.com/apache/apisix/pull/9607)
+- :warning: admin-api 的 `/apisix/admin/plugins?all=true` 接口标记为弃用：[#9580](https://github.com/apache/apisix/pull/9580)
+- :warning: ua-restriction 插件不允许同时启用黑名单和白名单：[#9841](https://github.com/apache/apisix/pull/9841)
+
+### Core
+
+- :sunrise: 支持根据 host 级别动态设置 TLS 协议版本：[#9903](https://github.com/apache/apisix/pull/9903)
+- :sunrise: 支持强制删除资源：[#9810](https://github.com/apache/apisix/pull/9810)
+- :sunrise: 支持从 yaml 中提取环境变量：[#9855](https://github.com/apache/apisix/pull/9855)
+- :sunrise: admin-api 新增 schema validate API 校验资源配置：[#10065](https://github.com/apache/apisix/pull/10065)
+
+### Plugins
+
+- :sunrise: 新增 chaitin-waf 插件：[#9838](https://github.com/apache/apisix/pull/9838)
+- :sunrise: file-logger 支持设置 var 变量：[#9712](https://github.com/apache/apisix/pull/9712)
+- :sunrise: mock 插件支持添加响应头：[#9720](https://github.com/apache/apisix/pull/9720)
+- :sunrise: proxy-rewrite 插件支持正则匹配 URL 编码：[#9813](https://github.com/apache/apisix/pull/9813)
+- :sunrise: google-cloud-logging 插件支持 client_email 配置：[#9813](https://github.com/apache/apisix/pull/9813)
+- :sunrise: opa 插件支持向上游发送 OPA server 返回的头：[#9710](https://github.com/apache/apisix/pull/9710)
+- :sunrise: openid-connect 插件支持配置代理服务器：[#9948](https://github.com/apache/apisix/pull/9948)
+
+### Bugfixes
+
+- 修复 log-rotate 插件使用自定义名称时，max_kept 配置不起作用：[#9749](https://github.com/apache/apisix/pull/9749)
+- 修复 limit_conn 在 stream 模式下非法使用 http 变量：[#9816](https://github.com/apache/apisix/pull/9816)
+- 修复 loki-logger 插件在获取 log_labels 时会索引空值：[#9850](https://github.com/apache/apisix/pull/9850)
+- 修复使用 limit-count 插件时，当请求被拒绝后，X-RateLimit-Reset 不应设置为 0：[#9978](https://github.com/apache/apisix/pull/9978)
+- 修复 nacos 插件在运行时索引一个空值：[#9960](https://github.com/apache/apisix/pull/9960)
+- 修复 etcd 在同步数据时，如果密钥有特殊字符，则同步异常：[#9967](https://github.com/apache/apisix/pull/9967)
+- 修复 tencent-cloud-cls 插件 DNS 解析失败：[#9843](https://github.com/apache/apisix/pull/9843)
+- 修复执行 reload 或 quit 命令时 worker 未退出：[#9909](https://github.com/apache/apisix/pull/9909)
+- 修复在 traffic-split 插件中 upstream_id 有效性验证：[#10008](https://github.com/apache/apisix/pull/10008)
 
 ## 3.4.0
 

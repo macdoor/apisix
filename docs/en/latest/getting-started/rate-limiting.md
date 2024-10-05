@@ -43,14 +43,14 @@ curl -i "http://127.0.0.1:9180/apisix/admin/routes/getting-started-ip" -X PATCH 
 }'
 ```
 
-You will receive an `HTTP/1.1 201 OK` response if the plugin was added successfully. The above configuration limits the incoming requests to a maximum of 2 requests within 10 seconds.
+You will receive an `HTTP/1.1 201 Created` response if the plugin was added successfully. The above configuration limits the incoming requests to a maximum of 2 requests within 10 seconds.
 
 ### Validate
 
 Let's generate 100 simultaneous requests to see the rate limiting plugin in effect.
 
 ```shell
-count=$(seq 100 | xargs -i curl "http://127.0.0.1:9080/ip" -I -sL | grep "503" | wc -l); echo \"200\": $((100 - $count)), \"503\": $count
+count=$(seq 100 | xargs -I {} curl "http://127.0.0.1:9080/ip" -I -sL | grep "503" | wc -l); echo \"200\": $((100 - $count)), \"503\": $count
 ```
 
 The results are as expected: out of the 100 requests, 2 requests were sent successfully (status code `200`) while the others were rejected (status code `503`).

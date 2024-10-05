@@ -27,7 +27,6 @@ require("jit.opt").start("minstitch=2", "maxtrace=4000",
 
 require("apisix.patch").patch()
 local core            = require("apisix.core")
-local conf_server     = require("apisix.conf_server")
 local plugin          = require("apisix.plugin")
 local plugin_config   = require("apisix.plugin_config")
 local consumer_group  = require("apisix.consumer_group")
@@ -50,7 +49,6 @@ local ngx             = ngx
 local get_method      = ngx.req.get_method
 local ngx_exit        = ngx.exit
 local math            = math
-local error           = error
 local ipairs          = ipairs
 local ngx_now         = ngx.now
 local ngx_var         = ngx.var
@@ -102,7 +100,6 @@ function _M.http_init(args)
     end
 
     xrpc.init()
-    conf_server.init()
 end
 
 
@@ -116,18 +113,8 @@ function _M.http_init_worker()
     -- for testing only
     core.log.info("random test in [1, 10000]: ", math.random(1, 10000))
 
-    -- Because go's scheduler doesn't work after fork, we have to load the gRPC module
-    -- in each worker.
-    core.grpc = require("apisix.core.grpc")
-    if type(core.grpc) ~= "table" then
-        core.grpc = nil
-    end
+    require("apisix.events").init_worker()
 
-    local we = require("resty.worker.events")
-    local ok, err = we.configure({shm = "worker-events", interval = 0.1})
-    if not ok then
-        error("failed to init worker event: " .. err)
-    end
     local discovery = require("apisix.discovery.init").discovery
     if discovery and discovery.init_worker then
         discovery.init_worker()
@@ -161,6 +148,7 @@ function _M.http_init_worker()
     apisix_upstream.init_worker()
     require("apisix.plugins.ext-plugin.init").init_worker()
 
+    control_api_router.init_worker()
     local_conf = core.config.local_conf()
 
     if local_conf.apisix and local_conf.apisix.enable_server_tokens == false then
@@ -170,7 +158,7 @@ end
 
 
 function _M.http_exit_worker()
-    -- TODO: we can support stream plugin later - currently there is not `destory` method
+    -- TODO: we can support stream plugin later - currently there is not `destroy` method
     -- in stream plugins
     plugin.exit_worker()
     require("apisix.plugins.ext-plugin.init").exit_worker()
@@ -197,6 +185,7 @@ function _M.http_ssl_client_hello_phase()
         core.log.error("failed to find SNI: " .. (err or advise))
         ngx_exit(-1)
     end
+    local tls_ext_status_req = apisix_ssl.get_status_request_ext()
 
     local ngx_ctx = ngx.ctx
     local api_ctx = core.tablepool.fetch("api_ctx", 0, 32)
@@ -207,6 +196,7 @@ function _M.http_ssl_client_hello_phase()
     ngx_ctx.matched_ssl = api_ctx.matched_ssl
     core.tablepool.release("api_ctx", api_ctx)
     ngx_ctx.api_ctx = nil
+    ngx_ctx.tls_ext_status_req = tls_ext_status_req
 
     if not ok then
         if err then
@@ -315,7 +305,7 @@ end
 
 local function verify_tls_client(ctx)
     if apisix_base_flags.client_cert_verified_in_handshake then
-        -- For apisix-base, there is no need to rematch SSL rules as the invalid
+        -- For apisix-runtime, there is no need to rematch SSL rules as the invalid
         -- connections are already rejected in the handshake
         return true
     end
@@ -579,6 +569,11 @@ end
 
 
 function _M.http_access_phase()
+    -- from HTTP/3 to HTTP/1.1 we need to convert :authority pesudo-header
+    -- to Host header, so we set upstream_host variable here.
+    if ngx.req.http_version() == 3 then
+        ngx.var.upstream_host = ngx.var.host .. ":" .. ngx.var.server_port
+    end
     local ngx_ctx = ngx.ctx
 
     -- always fetch table from the table pool, we don't need a reused api_ctx
@@ -1021,13 +1016,11 @@ function _M.stream_init_worker()
     plugin.init_worker()
     xrpc.init_worker()
     router.stream_init_worker()
+    require("apisix.http.service").init_worker()
     apisix_upstream.init_worker()
 
-    local we = require("resty.worker.events")
-    local ok, err = we.configure({shm = "worker-events-stream", interval = 0.1})
-    if not ok then
-        error("failed to init worker event: " .. err)
-    end
+    require("apisix.events").init_worker()
+
     local discovery = require("apisix.discovery.init").discovery
     if discovery and discovery.init_worker then
         discovery.init_worker()
@@ -1078,6 +1071,34 @@ function _M.stream_preread_phase()
 
         api_ctx.matched_upstream = upstream
 
+    elseif matched_route.value.service_id then
+        local service = service_fetch(matched_route.value.service_id)
+        if not service then
+            core.log.error("failed to fetch service configuration by ",
+                    "id: ", matched_route.value.service_id)
+            return core.response.exit(404)
+        end
+
+        matched_route = plugin.merge_service_stream_route(service, matched_route)
+        api_ctx.matched_route = matched_route
+        api_ctx.conf_type = "stream_route&service"
+        api_ctx.conf_version = matched_route.modifiedIndex .. "&" .. service.modifiedIndex
+        api_ctx.conf_id = matched_route.value.id .. "&" .. service.value.id
+        api_ctx.service_id = service.value.id
+        api_ctx.service_name = service.value.name
+        api_ctx.matched_upstream = matched_route.value.upstream
+        if matched_route.value.upstream_id and not matched_route.value.upstream then
+            local upstream = apisix_upstream.get_by_id(matched_route.value.upstream_id)
+            if not upstream then
+                if is_http then
+                    return core.response.exit(502)
+                end
+
+                return ngx_exit(1)
+            end
+
+            api_ctx.matched_upstream = upstream
+        end
     else
         if matched_route.has_domain then
             local err

@@ -37,7 +37,7 @@ This represents the configuration of the plugins that are executed during the HT
 
 :::note
 
-If [Route](../terminology/route.md), [Service](../terminology/service.md), [Plugin Config](../terminology/plugin-config.md) or Consumer are all bound to the same for plugins, only one plugin configuration will take effect. The priority of plugin configurations is: Consumer > Route > Plugin Config > Service. At the same time, there are 6 stages involved in the plugin execution process, namely `rewrite`, `access`, `before_proxy`, `header_filter`, `body_filter` and `log`.
+If [Route](../terminology/route.md), [Service](../terminology/service.md), [Plugin Config](../terminology/plugin-config.md) or [Consumer](../terminology/consumer.md) are all bound to the same for plugins, only one plugin configuration will take effect. The priority of plugin configurations is described in [plugin execution order](../terminology/plugin.md#plugins-execution-order). At the same time, there are various stages involved in the plugin execution process. See [plugin execution lifecycle](../terminology/plugin.md#plugins-execution-order).
 
 :::
 
@@ -63,11 +63,20 @@ APISIX provides several plugins for limiting current and speed, including [limit
 
 Next, we will use the `limit-count` plugin as an example to show you how to protect your API with a rate limit plugin:
 
+:::note
+You can fetch the `admin_key` from `config.yaml` and save to an environment variable with the following command:
+
+```bash
+admin_key=$(yq '.deployment.admin.admin_key[0].key' conf/config.yaml | sed 's/"//g')
+```
+
+:::
+
 1. Create a Route.
 
 ```shell
 curl -i http://127.0.0.1:9180/apisix/admin/routes/1 \
--H 'X-API-KEY: edd1c9f034335f136f87ad84b625c8f1' -X PUT -d '
+-H "X-API-KEY: $admin_key" -X PUT -d '
 {
     "uri": "/index.html",
     "plugins": {

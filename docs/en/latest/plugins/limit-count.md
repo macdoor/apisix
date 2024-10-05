@@ -43,7 +43,7 @@ The `limit-count` Plugin limits the number of requests to your service by a give
 | policy                  | string  | False                                     | "local"       | ["local", "redis", "redis-cluster"]    | Rate-limiting policies to use for retrieving and increment the limit count. When set to `local` the counters will be locally stored in memory on the node. When set to `redis` counters are stored on a Redis server and will be shared across the nodes. It is done usually for global speed limiting, and setting to `redis-cluster` uses a Redis cluster instead of a single instance.                                                                                                            |
 | allow_degradation       | boolean | False                                     | false         |                                        | When set to `true` enables Plugin degradation when the Plugin is temporarily unavailable (for example, a Redis timeout) and allows requests to continue.                                                                                                                                                                                                                                                                                                                                             |
 | show_limit_quota_header | boolean | False                                     | true          |                                        | When set to `true`, adds `X-RateLimit-Limit` (total number of requests) and `X-RateLimit-Remaining` (remaining number of requests) to the response header.                                                                                                                                                                                                                                                                                                                                           |
-| group                   | string  | False                                     |               | non-empty                              | Group to share the counter with. Routes configured with the same group will share the counter.                                                                                                                                                                                                                                                                                                                                                                                                       |
+| group                   | string  | False                                     |               | non-empty                              | Group to share the counter with. Routes configured with the same group will share the same counter. Do not configure with a value that was previously used in this attribute before as the plugin would not allow.                                                                                                                                                                                                                                                                                                                                                                                                      |
 | redis_host              | string  | required when `policy` is `redis`         |               |                                        | Address of the Redis server. Used when the `policy` attribute is set to `redis`.                                                                                                                                                                                                                                                                                                                                                                                                                     |
 | redis_port              | integer | False                                     | 6379          | [1,...]                                | Port of the Redis server. Used when the `policy` attribute is set to `redis`.                                                                                                                                                                                                                                                                                                                                                                                                                        |
 | redis_username          | string  | False                                     |               |                                        | Username for Redis authentication if Redis ACL is used (for Redis version >= 6.0). If you use the legacy authentication method `requirepass` to configure Redis password, configure only the `redis_password`. Used when the `policy` is set to `redis`.                                                                                                                                                                                                                                                                                                                                                                                                           |
@@ -61,9 +61,18 @@ The `limit-count` Plugin limits the number of requests to your service by a give
 
 You can enable the Plugin on a Route as shown below:
 
+:::note
+You can fetch the `admin_key` from `config.yaml` and save to an environment variable with the following command:
+
+```bash
+admin_key=$(yq '.deployment.admin.admin_key[0].key' conf/config.yaml | sed 's/"//g')
+```
+
+:::
+
 ```shell
 curl -i http://127.0.0.1:9180/apisix/admin/routes/1 \
--H 'X-API-KEY: edd1c9f034335f136f87ad84b625c8f1' -X PUT -d '
+-H "X-API-KEY: $admin_key" -X PUT -d '
 {
     "uri": "/index.html",
     "plugins": {
@@ -88,7 +97,7 @@ You can also configure the `key_type` to `var_combination` as shown:
 
 ```shell
 curl -i http://127.0.0.1:9180/apisix/admin/routes/1 \
--H 'X-API-KEY: edd1c9f034335f136f87ad84b625c8f1' -X PUT -d '
+-H "X-API-KEY: $admin_key" -X PUT -d '
 {
     "uri": "/index.html",
     "plugins": {
@@ -113,7 +122,7 @@ You can also create a group to share the same counter across multiple Routes:
 
 ```shell
 curl -i http://127.0.0.1:9180/apisix/admin/services/1 \
--H 'X-API-KEY: edd1c9f034335f136f87ad84b625c8f1' -X PUT -d '
+-H "X-API-KEY: $admin_key" -X PUT -d '
 {
     "plugins": {
         "limit-count": {
@@ -137,7 +146,7 @@ Now every Route which belongs to group `services_1#1640140620` (or the service w
 
 ```shell
 curl -i http://127.0.0.1:9180/apisix/admin/routes/1 \
--H 'X-API-KEY: edd1c9f034335f136f87ad84b625c8f1' -X PUT -d '
+-H "X-API-KEY: $admin_key" -X PUT -d '
 {
     "service_id": "1",
     "uri": "/hello"
@@ -146,7 +155,7 @@ curl -i http://127.0.0.1:9180/apisix/admin/routes/1 \
 
 ```shell
 curl -i http://127.0.0.1:9180/apisix/admin/routes/2 \
--H 'X-API-KEY: edd1c9f034335f136f87ad84b625c8f1' -X PUT -d '
+-H "X-API-KEY: $admin_key" -X PUT -d '
 {
     "service_id": "1",
     "uri": "/hello2"
@@ -165,7 +174,7 @@ You can also share the same limit counter for all your requests by setting the `
 
 ```shell
 curl -i http://127.0.0.1:9180/apisix/admin/services/1 \
--H 'X-API-KEY: edd1c9f034335f136f87ad84b625c8f1' -X PUT -d '
+-H "X-API-KEY: $admin_key" -X PUT -d '
 {
     "plugins": {
         "limit-count": {
@@ -200,7 +209,7 @@ The example below shows how you can use the `redis` policy:
 
 ```shell
 curl -i http://127.0.0.1:9180/apisix/admin/routes/1 \
--H 'X-API-KEY: edd1c9f034335f136f87ad84b625c8f1' -X PUT -d '
+-H "X-API-KEY: $admin_key" -X PUT -d '
 {
     "uri": "/index.html",
     "plugins": {
@@ -230,7 +239,7 @@ Similarly you can also configure the `redis-cluster` policy:
 
 ```shell
 curl -i http://127.0.0.1:9180/apisix/admin/routes/1 \
--H 'X-API-KEY: edd1c9f034335f136f87ad84b625c8f1' -X PUT -d '
+-H "X-API-KEY: $admin_key" -X PUT -d '
 {
     "uri": "/index.html",
     "plugins": {
@@ -246,6 +255,37 @@ curl -i http://127.0.0.1:9180/apisix/admin/routes/1 \
             ],
             "redis_password": "password",
             "redis_cluster_name": "redis-cluster-1"
+        }
+    },
+    "upstream": {
+        "type": "roundrobin",
+        "nodes": {
+            "127.0.0.1:1980": 1
+        }
+    }
+}'
+```
+
+In addition, you can use APISIX secret to store and reference plugin attributes. APISIX currently supports storing secrets in two ways - [Environment Variables and HashiCorp Vault](../terminology/secret.md). For example, in
+case you have environment variables `REDIS_HOST` and `REDIS_PASSWORD` set, you can use them in the plugin configuration as shown below:
+
+```shell
+curl -i http://127.0.0.1:9180/apisix/admin/routes/1 \
+-H "X-API-KEY: $admin_key" -X PUT -d '
+{
+    "uri": "/index.html",
+    "plugins": {
+        "limit-count": {
+            "count": 2,
+            "time_window": 60,
+            "rejected_code": 503,
+            "key": "remote_addr",
+            "policy": "redis",
+            "redis_host": "$ENV://REDIS_HOST",
+            "redis_port": 6379,
+            "redis_password": "$ENV://REDIS_PASSWORD",
+            "redis_database": 1,
+            "redis_timeout": 1001
         }
     },
     "upstream": {
@@ -310,7 +350,7 @@ To remove the `limit-count` Plugin, you can delete the corresponding JSON config
 
 ```shell
 curl http://127.0.0.1:9180/apisix/admin/routes/1 \
--H 'X-API-KEY: edd1c9f034335f136f87ad84b625c8f1' -X PUT -d '
+-H "X-API-KEY: $admin_key" -X PUT -d '
 {
     "methods": ["GET"],
     "uri": "/index.html",
