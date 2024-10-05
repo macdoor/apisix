@@ -94,7 +94,7 @@ local schema = {
             properties = {
                 verify = {
                     type = "boolean",
-                   default = false
+                    default = false
                 },
             },
         },

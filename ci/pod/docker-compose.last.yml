@@ -60,6 +60,7 @@ services:
       - "9092:9092"
       - "9093:9093"
       - "9094:9094"
+      - "9095:9095"
     depends_on:
       - zookeeper-server1
       - zookeeper-server2
@@ -67,6 +68,7 @@ services:
       kafka_net:
     volumes:
       - ./ci/pod/kafka/kafka-server/kafka_jaas.conf:/opt/bitnami/kafka/config/kafka_jaas.conf:ro
+      - ./ci/pod/kafka/kafka-server/client.properties:/opt/bitnami/kafka/config/client.properties:ro
       - ./ci/pod/kafka/kafka-server/selfsigned.jks:/opt/bitnami/kafka/config/certs/kafka.keystore.jks:ro
       - ./ci/pod/kafka/kafka-server/selfsigned.jks:/opt/bitnami/kafka/config/certs/kafka.truststore.jks:ro
 
@@ -81,6 +83,7 @@ services:
       - "19092:9092"
       - "19093:9093"
       - "19094:9094"
+      - "19095:9095"
     depends_on:
       - zookeeper-server1
       - zookeeper-server2
@@ -88,6 +91,7 @@ services:
       kafka_net:
     volumes:
       - ./ci/pod/kafka/kafka-server/kafka_jaas.conf:/opt/bitnami/kafka/config/kafka_jaas.conf:ro
+      - ./ci/pod/kafka/kafka-server/client.properties:/opt/bitnami/kafka/config/client.properties:ro
       - ./ci/pod/kafka/kafka-server/selfsigned.jks:/opt/bitnami/kafka/config/certs/kafka.keystore.jks:ro
       - ./ci/pod/kafka/kafka-server/selfsigned.jks:/opt/bitnami/kafka/config/certs/kafka.truststore.jks:ro
 
